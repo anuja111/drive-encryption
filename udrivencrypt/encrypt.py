@@ -14,9 +14,10 @@ def Encrypt(self):
     self.EgroupBox = QGroupBox("")
     self.EcomboBox = QComboBox()
     self.EcomboBox.addItem('Select your drive')
-    device = self.list_device()
-    for i in device:
-        self.EcomboBox.addItem(i)
+    #device = self.list_devices()
+    #for i in device:
+        #self.EcomboBox.addItem(i['Label'])
+    self.EcomboBox.addItems(self.list_device())
     self.EcomboBox.setMinimumWidth(300)
     self.EcomboBox.move(150, 50)
     self.Ebtn = QPushButton("Format", self)

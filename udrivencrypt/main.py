@@ -10,8 +10,9 @@ from udrivencrypt.add import Add
 from udrivencrypt.delete import Delete
 import re
 
-filesystem = []
-devicename = []
+
+names_dev = []
+labels_dev = []
 
 class Window(QWidget):
     def __init__(self):
@@ -33,23 +34,22 @@ class Window(QWidget):
     def list_device(self):
         """
         The function to list all connected USB drives.
-        It uses 'df -h' command to filter connected USB drives by checking mount point.
+        It uses 'lsblk' command to filter connected USB drives by checking TYPE.
 
         :return:
-            devicename: label of each USB drive.
+            labels_dev: list of labels of connected USB drives.
         """
-        os.system("df -h > device")
-        with open("device", "r") as f:
-            device = []
-            device1 = []
-            for line in f.readlines()[1:]:
-                device.append(line.split()[5])
-                device1.append(line.split()[0])
-            for s in device:
-                if "/run/media" in s:
-                    filesystem.append(device1[device.index(s)])
-                    devicename.append(os.path.basename(s))
-        return devicename
+        os.system("lsblk -o NAME,TYPE,RM,LABEL -l -n > devices")
+        with open('devices') as f:
+            for line in f:
+                blk_list = re.split('\s+', line)
+                if str(blk_list[1]) == "part" and int(blk_list[2]) == 1:
+                    names_dev.append(blk_list[0])
+                    labels_dev.append(blk_list[3])
+                    #dev_dict.append({'Name':blk_list[0],'Label':blk_list[3]})
+                    print(names_dev)
+                    print(labels_dev)
+        return labels_dev
 
     def Entoggle(self):
         """
@@ -172,8 +172,8 @@ class Window(QWidget):
         self.hboxLayout.addWidget(self.progressLabel)
         self.hboxLayout.addWidget(self.progressBar)
         self.hboxLayout.addWidget(self.btn)
-        command = 'umount %s' % filesystem[devicename.index(self.EcomboBox.currentText())]
-        command1 = 'wipefs -a %s' % filesystem[devicename.index(self.EcomboBox.currentText())]
+        command = 'umount %s' % "/dev/"+names_dev[labels_dev.index(self.EcomboBox.currentText())]
+        command1 = 'wipefs -a %s' % "/dev/"+names_dev[labels_dev.index(self.EcomboBox.currentText())]
         x = os.system("echo %s |sudo -S %s" % (self.password_t.text(), command))
 
         if x == 0:
@@ -233,22 +233,23 @@ class Window(QWidget):
 
         :return: None
         """
+        dname = "/dev/"+names_dev[labels_dev.index(self.EcomboBox.currentText())]
         self.mapwidget.close()
-        child = pexpect.spawn('sudo cryptsetup luksFormat %s'% filesystem[devicename.index(self.EcomboBox.currentText())])
+        child = pexpect.spawn('sudo cryptsetup luksFormat %s'% dname)
         child.expect_exact('[sudo] password for %s:'% getpass.getuser())
         child.sendline(self.password_t.text())
-        child.expect_exact('\r\nWARNING!\r\n========\r\nThis will overwrite data on %s irrevocably.\r\n\r\nAre you sure? (Type uppercase yes):'% filesystem[devicename.index(self.EcomboBox.currentText())])
+        child.expect_exact('\r\nWARNING!\r\n========\r\nThis will overwrite data on %s irrevocably.\r\n\r\nAre you sure? (Type uppercase yes):'% dname)
         child.sendline('YES\n')
         child.expect_exact('Enter passphrase:')
         child.sendline(self.Etextbox.text())
         child.expect_exact('Verify passphrase:')
         child.sendline(self.Etextbox1.text())
         child.expect(pexpect.EOF, timeout=None)
-        #print(filesystem[devicename.index(self.EcomboBox.currentText())],self.map.text(),self.password_t.text())
-        child1=pexpect.spawn('sudo cryptsetup luksOpen %s %s'% (filesystem[devicename.index(self.EcomboBox.currentText())],self.map.text()))
+            #print(filesystem[devicename.index(self.EcomboBox.currentText())],self.map.text(),self.password_t.text())
+        child1=pexpect.spawn('sudo cryptsetup luksOpen %s %s'% (dname,self.map.text()))
         child1.expect_exact('[sudo] password for %s:' % getpass.getuser())
         child1.sendline(self.password_t.text())
-        child1.expect_exact('Enter passphrase for %s:'% filesystem[devicename.index(self.EcomboBox.currentText())])
+        child1.expect_exact('Enter passphrase for %s:'% dname)
         child1.sendline(self.Etextbox.text())
         child1.expect(pexpect.EOF, timeout=None)
         command4='mkfs.ext4 /dev/mapper/%s -L %s'%(self.map.text(),self.map.text())
@@ -258,10 +259,10 @@ class Window(QWidget):
             y=os.system("echo %s | sudo -S %s"%(self.password_t.text(),command5))
             if y==0:
                 choice = QMessageBox.information(self, 'Message',
-                                                 "Eject the drive and reconnect it. Now restart application for further use.",
-                                                 QMessageBox.Yes)
+                                                     "Eject the drive and reconnect it. Now restart application for further use.",
+                                                     QMessageBox.Yes)
                 if choice == QMessageBox.Yes:
-                    sys.exit()
+                        sys.exit()
 
 
     def listEncryptedDevices(self):
